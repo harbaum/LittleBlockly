@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>LittleBlockly</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="./blockly_compressed.js"></script>
+    <script src="./blocks_compressed.js"></script>
+    <script src="./python_compressed.js"></script>
+    <script src="./msg/js/en.js"></script>
+    <script src="./code.js"></script>
+  </head>
+  
+  <body>
+    <h1>LittleBlockly</h1>
+
+    <button onclick="run();">Save on target</button><p/>
+    
+    <div id="blocklyDiv" style="height: 480px; width: 600px;"></div>
+
+    <xml id="toolbox" style="display: none">
+      <block type="controls_if"></block>
+      <block type="logic_compare"></block>
+      <block type="controls_repeat_ext"></block>
+      <block type="math_number"></block>
+      <block type="math_arithmetic"></block>
+      <block type="text"></block>
+      <block type="text_print"></block>
+    </xml>
+  </body>
+</html>
