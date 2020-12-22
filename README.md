@@ -18,7 +18,7 @@ The required wiring (VCC/GND is shared by the touch):
 | 23 | SDI(MOSI) | T_DIN |
 | 18 | SCK | T_CLK|
 | 33 | LED | |
-| 23 | SDO(MOSI) | T_DO |
+| 23 | SDO(MISO) | T_DO |
 | 26 | | T_CS |
 
 The ESP32 needs to be flashed with the [LVGL micropython
