@@ -1,5 +1,7 @@
 import gui
 import lvgl as lv
+import network
+import ujson
 
 # this should go into the GUI class
 class KeyboardEntry(lv.obj):
@@ -12,6 +14,7 @@ class KeyboardEntry(lv.obj):
                 self.kbd = None              
             elif evt == lv.EVENT.CANCEL:
                 obj.del_async();
+                cb(None)
             elif evt == lv.EVENT.APPLY:
                 text = self.text.get_text()
                 obj.del_async();
@@ -57,33 +60,106 @@ class Page_WiFi:
 
         page.add_style(lv.obj.PART.MAIN, gui.ColorBgStyle(0xfdd))
 
-        # "Scan ..." button on top
-        self.btn = lv.btn(page)
-        self.btn.align(page, lv.ALIGN.IN_TOP_MID, 0, 8)
-        self.btn.set_event_cb(self.on_btn)
-        label = lv.label(self.btn)
-        label.set_text("Scan ...");
+        # use relative path on unix, absolute root else
+        if hasattr(network, "UNIX"):
+            self.config_file = "wifi.json"
+        else:
+            self.config_file = "/wifi.json"
+        
+        # read network config if possible
+        config = self.read_wifi_config()
+        
+        # create dropdown, but disable it for now
+        self.ssids = lv.dropdown(page)
+        self.ssids.set_size(160, 32);
+        self.ssids.align(page, lv.ALIGN.IN_TOP_MID, -20, 10)
+        self.ssids.set_event_cb(self.on_ssid)
 
-        # List of WLANs below
-        self.list = lv.list(page)
-        self.list.set_size(200, 190);
-        self.list.align(page, lv.ALIGN.IN_TOP_MID, 0, 63)
+        # pre-populate list from stored wifi data if present
+        if len(config["keys"]) > 0:
+            ssids = list(config["keys"].keys())
+            self.networks = [ { "ssid": x, "open": not config["keys"][x]} for x in ssids]
+            self.set_ssid_list(ssids)
+        else:
+            self.ssids.set_options("")
+            self.ssids.set_text("No Networks")
+            self.ssids.set_show_selected(False)
+            self.ssids.set_click(False);            
+        
+        # scan button
+        self.scan_btn = lv.btn(page)
+        self.scan_btn.set_size(32, 32);
+        self.scan_btn.align(page, lv.ALIGN.IN_TOP_MID, 85, 10)
+        self.scan_btn.set_event_cb(self.on_scan_btn)
+        label = lv.label(self.scan_btn)
+        label.set_text(lv.SYMBOL.REFRESH);          
 
-    def do_connect(self, ssid, password):
+        # info/status label
+        self.label = lv.label(page)
+        self.label.set_long_mode(lv.label.LONG.BREAK);
+        self.label.set_width(210);
+        self.label.set_text("");          
+        self.label.set_align(lv.label.ALIGN.CENTER)
+        self.label.align(page, lv.ALIGN.IN_TOP_MID, 0, 60)
+
+        # enable wlan
+        self.wlan = network.WLAN(network.STA_IF)
+        self.wlan.active(True)
+        
+        # check if there is info about a last successfully
+        # used network
+        if "last" in config:
+            print("Trying last network",config["last"],"...")
+            self.connect(config["last"])
+
+    def set_ssid_list(self, ssids):
+        self.ssids.set_text("Select ...")        
+        self.ssids.set_show_selected(False)
+        self.ssids.set_click(True)
+        self.ssids.set_options("\n".join(ssids))
+            
+    def on_ssid(self, obj, event):
+        if event == lv.EVENT.VALUE_CHANGED:
+            network = self.networks[obj.get_selected()]
+            print("SEL:", self.networks[obj.get_selected()])
+            if network["open"]:
+                self.connect_with_key(network["ssid"], None)
+            else:
+                self.connect(network["ssid"])
+        
+    def on_scan_btn(self, obj, event):
+        if event == lv.EVENT.CLICKED:
+            self.networks = self.scan_wlan()
+            self.set_ssid_list([x["ssid"] for x in self.networks])
+
+    def connect_with_key(self, ssid, password):
 
         def connection_done(ok):
+            self.ssids.set_click(True);
+            self.scan_btn.set_click(True);
+            
             if ok:
                 self.write_key(ssid, password)
-                print(self.wlan.ifconfig())
 
+                self.ssids.set_show_selected(True)
+                
+                # find ssid in network list and select it
+                for i in range(len(self.networks)):
+                    if self.networks[i]["ssid"] == ssid:
+                        self.ssids.set_selected(i)
+                
+                self.label.set_text("Connected\n\nSSID: "+ssid+"\nIP: "+self.wlan.ifconfig()[0]+"\nMDNS: ftduino.local");
+                
                 try:
                     import uwebserver
                     uwebserver.start()
                 except Exception as e:
-                    print("Error:", e)                    
+                    print("Webserver error:", e)
 
+            else:
+                self.label.set_text("Connection failed");
+                
             self.task.set_repeat_count(0);
-            self.spinner.del_async();
         
         def connect_task(task):
             self.cnt = self.cnt + 1
@@ -96,33 +172,21 @@ class Page_WiFi:
                 if self.cnt == 25:
                     connection_done(True)
 
-            # timeout after 50 * 100ms = 5 seconds
-            if self.cnt == 50:
+            # timeout after 100 * 100ms = 10 seconds
+            if self.cnt == 100:
                 if hasattr(self, "wlan"):
                     self.wlan.active(False)  # interrupt the connection attempt
             
                 connection_done(False)
                 
-        # create spinner
-        self.spinner = lv.spinner(lv.scr_act());
-        self.spinner.set_size(100, 100);
-        self.spinner.align(lv.scr_act(), lv.ALIGN.CENTER, 0, 0);
-
-        if hasattr(self, "wlan"):
-            self.wlan.active(True)
-            if self.wlan.isconnected():
-                self.spinner.del_async();
-
-            self.wlan.connect(ssid, password)
+        self.wlan.active(True)
+        self.wlan.connect(ssid, password)
 
         # start a task that checks if connection was successful
         self.cnt = 0
         self.task = lv.task_create(connect_task, 100, lv.TASK_PRIO.MID, None);
         
     def scan_wlan(self):
-        import network
-        self.wlan = network.WLAN(network.STA_IF)
-        self.wlan.active(True)
         network_scanned = self.wlan.scan()
         networks = [ ]
         
@@ -135,8 +199,7 @@ class Page_WiFi:
 
     def read_wifi_config(self):
         try:
-            import ujson
-            with open('/wifi.json') as fp:
+            with open(self.config_file) as fp:
 	        config = ujson.loads(fp.read())
             return config
         except Exception as e:
@@ -150,38 +213,34 @@ class Page_WiFi:
         config = self.read_wifi_config()
         if not ssid in config["keys"]:
             config["keys"][ssid] = key
+            config["last"] = ssid
             try:
-                import ujson
-                with open('/wifi.json', 'w') as fp:
+                with open(self.config_file, 'w') as fp:
                     ujson.dump(config, fp)
             except Exception as e:
                 print("Error:", e)
     
-    def getKey(self, ssid):
+    def connect(self, ssid):
+        self.label.set_text("Connecting ...");
+
+        # prevent user interaction while connecting
+        self.ssids.set_click(False);      
+        self.scan_btn.set_click(False);
+                
         config = self.read_wifi_config()        
         if ssid in config["keys"]:
-            self.do_connect(ssid, config["keys"][ssid])
+            self.connect_with_key(ssid, config["keys"][ssid])
             return
         
         def keyEntered(key):
-            self.do_connect(ssid, key)
-        
+            if key:
+                self.connect_with_key(ssid, key)
+            else:
+                # user did not provide a key
+                # make ui interactive, again
+                self.ssids.set_click(True);      
+                self.scan_btn.set_click(True);
+                self.label.set_text("");
+                
         self.kbd = KeyboardEntry("Enter key:", keyEntered, lv.scr_act())
     
-    def on_btn(self, obj, event):
-        def on_network_btn(obj, event):
-            if event == lv.EVENT.CLICKED:
-                ssid = lv.list.__cast__(obj).get_btn_text()
-                network = list(filter(lambda x: x['ssid'] == ssid, self.networks))[0]
-
-                if network["open"]:
-                    self.do_connect(ssid, None)
-                else:                
-                    self.getKey(ssid)
-        
-        if event == lv.EVENT.CLICKED:
-            self.list.clean();
-            self.networks = self.scan_wlan()
-            for n in self.networks:
-                list_btn = self.list.add_btn(lv.SYMBOL.WIFI, n["ssid"]);
-                list_btn.set_event_cb(on_network_btn);
