@@ -148,7 +148,7 @@ class Page_WiFi:
                     if self.networks[i]["ssid"] == ssid:
                         self.ssids.set_selected(i)
                 
-                self.label.set_text("Connected\n\nSSID: "+ssid+"\nIP: "+self.wlan.ifconfig()[0]+"\nMDNS: ftduino.local");
+                self.label.set_text("Connected\n\nSSID: "+ssid+"\nIP: "+self.wlan.ifconfig()[0]+"\nMDNS: littleblockly.local");
                 
                 try:
                     import uwebserver
