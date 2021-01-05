@@ -3,6 +3,8 @@
 This project combines LVGL and Micropython with Blockly. A quick and
 dirty video can be found [here](https://youtu.be/ahSjJkrcRJM).
 
+![Screenshot](demo.png)
+
 The demo runs on an ESP32 WROVER connected to a ILI9341 based
 2.2 inch 240x320 TFT touchscreen.
 
