@@ -8,7 +8,7 @@ function init() {
     toolbox = document.getElementById('toolbox');
    
     workspace = Blockly.inject('blocklyDiv',
-			       { media: './media/',
+			       { media: './blockly/media/',
 				 toolbox: toolbox } );
 }
     

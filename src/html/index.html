@@ -3,21 +3,66 @@
   <head>
     <meta charset="utf-8">
     <title>LittleBlockly</title>
-    <link rel="stylesheet" href="./style.css" />
-    <script src="./blockly_compressed.js"></script>
-    <script src="./blocks_compressed.js"></script>
-    <script src="./python_compressed.js"></script>
-    <script src="./msg/js/en.js"></script>
-    <script src="./code.js"></script>
+    <script src="./blockly/blockly_compressed.js"></script>
+    <script src="./blockly/blocks_compressed.js"></script>
+    <script src="./blockly/python_compressed.js"></script>
+    <script src="./blockly/msg/js/en.js"></script>
+    <script src="./blockly/code.js"></script>
+
+    <script>
+      // ========== handle the liveview ==========
+      function update_screenshot() {
+	  var request = new XMLHttpRequest();
+	  request.onreadystatechange = function() {
+	      if (request.readyState == 4) {		  
+		  if(request.status == 200) {
+		      var pixelArray = new Uint8Array(request.response);
+		      var canvas = document.getElementById("liveview")
+		      var ctx = canvas.getContext("2d");
+
+		      // allocate buffer for this chunk
+		      var imageData = ctx.createImageData(canvas.width, canvas.height);
+		      for(i = 0;i<pixelArray.length;i++) {
+			  // read two bytes into one big endian uint16 
+			  var pixel = (pixelArray[2*i]<<8) + pixelArray[2*i+1];
+			  // convert rgb565 to rgba32
+			  imageData.data[4*i+0] = (pixel >> 8) & 0xf8;
+			  imageData.data[4*i+1] = (pixel >> 3) & 0xfc;
+			  imageData.data[4*i+2] = (pixel << 3) & 0xf8;
+			  imageData.data[4*i+3] = 0xff;
+		      }
+		      ctx.putImageData(imageData, 0, 0);
+		  } else {
+		      // screenshot download failed ...
+		  }
+	      }
+	  };
+	  // Send request with data
+	  request.open("GET", "screen", true);
+	  request.responseType = "arraybuffer";
+	  request.setRequestHeader("Cache-Control", "no-cache");
+	  request.send( null );
+      }
+      
+      window.addEventListener('load', update_screenshot);
+    </script>
   </head>
   
   <body>
     <h1>LittleBlockly</h1>
 
-    <button onclick="run();">Save on target</button><p/>
-    
-    <div id="blocklyDiv" style="height: 480px; width: 600px;"></div>
+    <table>
+      <tr>
+	<td><button onclick="run();">Save on target</button></td>
+	<td><button onclick="update_screenshot();">Refresh</button></td>
+      </tr>
 
+      <tr>
+	<td><div id="blocklyDiv" style="height: 480px; width: 600px;"></div></td>
+	<td><canvas id="liveview" width="240px" height="320px" style="border: 1px solid black;"></canvas></td>
+      </tr>
+    </table>
+    
     <xml id="toolbox" style="display: none">
       <block type="controls_if"></block>
       <block type="logic_compare"></block>
