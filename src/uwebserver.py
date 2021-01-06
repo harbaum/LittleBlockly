@@ -5,6 +5,8 @@ import uos, ujson
 
 import lvgl as lv
 
+click = None
+
 def check4file(fname):
     try:
         f = open(fname, "r")
@@ -14,6 +16,26 @@ def check4file(fname):
         return False
 
 def do_POST(hdr, s):
+    global click
+    
+    # check if this was a "click" post
+    url = hdr[0].split(' ')[1];
+    if url.startswith("/click"):
+        c = { }
+        print("Click");
+        parmstr = url.split("?")[1]
+        for p in parmstr.split("&"):
+            id,val = p.split("=")
+            if id == "x": c["x"] = int(val);
+            if id == "y": c["y"] = int(val);
+
+        if "x" in c and "y" in c:
+            print("Click:", c);
+            c["reported"] = False;
+            click = c
+        
+        return
+    
     # iterate over all header lines to extract boundary and
     # content-length
     boundary = None
@@ -253,11 +275,35 @@ def accept_http_connect(http_server):
             
     print("tx done", remote_addr);
 
+def input_callback(drv, data):
+    global click
+
+    if not click:
+        data.state = lv.INDEV_STATE.REL
+    elif click["reported"]:
+        data.state = lv.INDEV_STATE.REL
+        data.point.x = click["x"]
+        data.point.y = click["y"]
+        click = None
+    else:   
+        data.point.x = click["x"]
+        data.point.y = click["y"]
+        click["reported"] = True
+        data.state = lv.INDEV_STATE.PR
+    return False
+    
 # start listening for http connections
 def start(port=80):
     if espidf.mdns_init() == 0 and espidf.mdns_hostname_set('littleblockly') == 0:
         print("mdns: littleblockly.local")
-    
+
+    # setup input driver to send click events
+    drv = lv.indev_drv_t()
+    drv.init()
+    drv.type = lv.INDEV_TYPE.POINTER
+    drv.read_cb = input_callback
+    drv.register()    
+
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     

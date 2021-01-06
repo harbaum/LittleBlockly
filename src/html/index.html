@@ -44,6 +44,19 @@
 	  request.send( null );
       }
       
+      function on_liveview_click(event) {
+	  event.stopPropagation()
+
+	  // this is the place to generate click events to be sent back
+	  console.log("Liveview event:", event.layerX, event.layerY);
+
+	  // send click position
+	  var request = new XMLHttpRequest();
+	  request.open("POST", "click?x="+ event.layerX+"&y="+event.layerY, true);
+	  request.setRequestHeader("Cache-Control", "no-cache");
+	  request.send( null );
+      }
+            
       window.addEventListener('load', update_screenshot);
     </script>
   </head>
@@ -59,7 +72,7 @@
 
       <tr>
 	<td><div id="blocklyDiv" style="height: 480px; width: 600px;"></div></td>
-	<td><canvas id="liveview" width="240px" height="320px" style="border: 1px solid black;"></canvas></td>
+	<td><canvas id="liveview" width="240px" height="320px" style="border: 1px solid black;" onclick="on_liveview_click(event);"></canvas></td>
       </tr>
     </table>
     
